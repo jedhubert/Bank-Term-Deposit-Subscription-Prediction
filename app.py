@@ -6,7 +6,6 @@ import plotly.express as px
 from datetime import datetime
 import os
 
-# Machine Learning
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import RobustScaler, OneHotEncoder
 from sklearn.compose import ColumnTransformer
@@ -15,7 +14,6 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
 from xgboost import XGBClassifier
 
-# Page configuration
 st.set_page_config(
     page_title="Bank Term Deposit Prediction",
     page_icon="🏦",
@@ -23,7 +21,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS
 st.markdown("""
 <style>
     .main-header {
@@ -54,7 +51,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Feature Engineering Class
 class FeatureEngineer(BaseEstimator, TransformerMixin):
     def fit(self, X, y=None):
         return self
@@ -62,24 +58,19 @@ class FeatureEngineer(BaseEstimator, TransformerMixin):
     def transform(self, X):
         X = X.copy()
         
-        # Duration features
         if 'duration' in X.columns:
             X['duration_log'] = np.log1p(X['duration'])
         
-        # Balance features
         if 'balance' in X.columns:
             X['balance_positive'] = (X['balance'] > 0).astype(int)
         
-        # Age groups
         if 'age' in X.columns:
             X['age_group'] = pd.cut(X['age'], bins=[0, 30, 40, 50, 60, 100], 
                                     labels=['young', 'middle', 'senior', 'old', 'elderly'])
         
-        # Campaign intensity
         if 'campaign' in X.columns:
             X['high_campaign'] = (X['campaign'] > 3).astype(int)
         
-        # Previous contact
         if 'pdays' in X.columns:
             X['was_contacted_before'] = (X['pdays'] != -1).astype(int)
         
@@ -90,35 +81,28 @@ def train_model(train_path):
     """Train the model from scratch using the training data"""
     
     with st.spinner("🔄 Training model... This may take a few minutes..."):
-        # Load data
         train_df = pd.read_csv(train_path)
         
-        # Prepare features
         X = train_df.drop(['y'], axis=1, errors='ignore')
         if 'id' in X.columns:
             X = X.drop(['id'], axis=1)
         
-        # Convert target
         if train_df['y'].dtype == 'object':
             y = train_df['y'].map({'no': 0, 'yes': 1})
         else:
             y = train_df['y'].astype(int)
         
-        # Split data
         X_train, X_val, y_train, y_val = train_test_split(
             X, y, test_size=0.2, random_state=42, stratify=y
         )
         
-        # Feature engineering
         fe = FeatureEngineer()
         X_train_fe = fe.fit_transform(X_train)
         X_val_fe = fe.transform(X_val)
         
-        # Define features
         numeric_features = X_train_fe.select_dtypes(include=['int64', 'float64']).columns.tolist()
         categorical_features = X_train_fe.select_dtypes(include=['object', 'category']).columns.tolist()
         
-        # Preprocessing
         numeric_transformer = Pipeline(steps=[('scaler', RobustScaler())])
         categorical_transformer = Pipeline(steps=[
             ('onehot', OneHotEncoder(handle_unknown='ignore', sparse_output=False))
@@ -132,7 +116,6 @@ def train_model(train_path):
             remainder='drop'
         )
         
-        # Create complete pipeline
         pipeline = Pipeline([
             ('feature_engineering', fe),
             ('preprocessing', preprocessor),
@@ -145,10 +128,8 @@ def train_model(train_path):
             ))
         ])
         
-        # Train
         pipeline.fit(X_train, y_train)
         
-        # Evaluate
         y_val_pred = pipeline.predict(X_val)
         y_val_proba = pipeline.predict_proba(X_val)[:, 1]
         
@@ -164,12 +145,10 @@ def train_model(train_path):
         
         return pipeline, metadata
 
-# Load or train model
 @st.cache_resource
 def get_model():
     """Get the trained model - train if necessary"""
     
-    # Check if training data exists
     possible_paths = ['train (3).csv']
     train_path = None
     
@@ -182,21 +161,17 @@ def get_model():
         st.error("❌ Training data not found. Please ensure train.csv is in the same folder as app.py")
         return None, None
     
-    # Train model
     pipeline, metadata = train_model(train_path)
     
     st.success("✅ Model trained successfully!")
     
     return pipeline, metadata
 
-# Initialize model
 pipeline, metadata = get_model()
 
-# Header
 st.markdown('<p class="main-header">🏦 Bank Term Deposit Prediction System</p>', unsafe_allow_html=True)
 st.markdown("---")
 
-# Sidebar
 with st.sidebar:
     st.image("https://via.placeholder.com/300x150/1f77b4/ffffff?text=Bank+Logo", use_container_width=True)
     st.markdown("### Navigation")
@@ -209,7 +184,6 @@ with st.sidebar:
         st.markdown(f"**Accuracy:** {metadata['accuracy']:.2%}")
         st.markdown(f"**ROC-AUC:** {metadata['roc_auc']:.4f}")
 
-# Page: Single Prediction
 if page == "🎯 Single Prediction":
     st.markdown("### Single Customer Prediction")
     st.write("Enter customer details to predict term deposit subscription probability")
@@ -250,7 +224,6 @@ if page == "🎯 Single Prediction":
     
     if st.button("🔮 Predict", type="primary", use_container_width=True):
         if pipeline:
-            # Create input dataframe
             input_data = pd.DataFrame({
                 'age': [age],
                 'job': [job],
@@ -270,12 +243,10 @@ if page == "🎯 Single Prediction":
                 'poutcome': [poutcome]
             })
             
-            # Make prediction
             try:
                 prediction_proba = pipeline.predict_proba(input_data)[0]
                 prediction = pipeline.predict(input_data)[0]
                 
-                # Display results
                 st.markdown("---")
                 st.markdown("### Prediction Results")
                 
@@ -294,7 +265,6 @@ if page == "🎯 Single Prediction":
                         )
                 
                 with col2:
-                    # Probability gauge
                     fig = go.Figure(go.Indicator(
                         mode="gauge+number",
                         value=prediction_proba[1] * 100,
@@ -317,7 +287,6 @@ if page == "🎯 Single Prediction":
                     fig.update_layout(height=300)
                     st.plotly_chart(fig, use_container_width=True)
                 
-                # Recommendation
                 st.markdown("---")
                 st.markdown("### 💡 Recommendation")
                 
@@ -347,7 +316,6 @@ if page == "🎯 Single Prediction":
         else:
             st.error("Model not loaded. Please check training data.")
 
-# Page: Batch Prediction
 elif page == "📊 Batch Prediction":
     st.markdown("### Batch Prediction")
     st.write("Upload a CSV file with multiple customers for batch predictions")
@@ -365,11 +333,9 @@ elif page == "📊 Batch Prediction":
             if st.button("🚀 Generate Predictions", type="primary"):
                 if pipeline:
                     with st.spinner("Generating predictions..."):
-                        # Make predictions
                         predictions_proba = pipeline.predict_proba(df)[:, 1]
                         predictions = (predictions_proba > 0.5).astype(int)
                         
-                        # Add to dataframe
                         results_df = df.copy()
                         results_df['prediction'] = predictions
                         results_df['probability'] = predictions_proba
@@ -378,7 +344,6 @@ elif page == "📊 Batch Prediction":
                             0: 'Low Priority'
                         })
                         
-                        # Display summary
                         st.markdown("---")
                         st.markdown("### 📊 Prediction Summary")
                         
@@ -396,7 +361,6 @@ elif page == "📊 Batch Prediction":
                             avg_prob = predictions_proba.mean()
                             st.metric("Average Probability", f"{avg_prob:.1%}")
                         
-                        # Distribution chart
                         st.markdown("---")
                         col1, col2 = st.columns(2)
                         
@@ -420,7 +384,6 @@ elif page == "📊 Batch Prediction":
                             )
                             st.plotly_chart(fig, use_container_width=True)
                         
-                        # Show results
                         st.markdown("---")
                         st.markdown("### 📋 Detailed Results")
                         st.dataframe(
@@ -428,7 +391,6 @@ elif page == "📊 Batch Prediction":
                             use_container_width=True
                         )
                         
-                        # Download button
                         csv = results_df.to_csv(index=False)
                         st.download_button(
                             label="📥 Download Predictions",
@@ -445,7 +407,6 @@ elif page == "📊 Batch Prediction":
     else:
         st.info("👆 Upload a CSV file to get started")
 
-# Page: Model Info
 elif page == "📈 Model Info":
     st.markdown("### Model Performance Metrics")
     
@@ -471,7 +432,6 @@ elif page == "📈 Model Info":
         **Status:** ✅ Active
         """)
         
-        # Performance visualization
         categories = ['Accuracy', 'Precision', 'Recall', 'F1-Score', 'ROC-AUC']
         values = [
             metadata['accuracy'],
